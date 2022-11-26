@@ -12,3 +12,7 @@ indicatif = "0.17.2"
 relative-path = "1.7.2"
 tar = "0.4.38"
 tokio = { version = "1.22.0", features = ["full"] }
+
+[dev-dependencies]
+assert_cmd = "2.0.0"
+predicates = "2.1"

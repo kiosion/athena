@@ -7,6 +7,7 @@ use indicatif::{ProgressBar};
 
 mod validate;
 mod utils;
+mod b2;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -30,8 +31,6 @@ async fn main() {
             process::exit(1);
         },
     };
-    // println!("Input path: {}", input_path.display());
-
     let output_path = match validate::output(PathBuf::from(&args.dest)) {
         Ok(path) => path,
         Err(e) => {
@@ -39,10 +38,9 @@ async fn main() {
             process::exit(1);
         }
     };
-    // println!("Output path: {}", output_path.display());
 
     let spinner = utils::construct_spinner();
-    spinner.enable_steady_tick(Duration::from_millis(100));
+    spinner.enable_steady_tick(Duration::from_millis(150));
     spinner.set_message("Processing files...");
 
     let handle = tokio::task::spawn_blocking({
@@ -112,40 +110,40 @@ async fn compress_files(paths: Vec<PathBuf>, input_dir: PathBuf, output_dir: Pat
     let archive_file = fs::File::create(output_dir.join(format!("{}.tar.gz", filename))).unwrap();
     let mut encoder = flate2::write::GzEncoder::new(archive_file, flate2::Compression::default());
     let mut archive = tar::Builder::new(&mut encoder);
+
     let inp_path = get_inp_path_only(&input_dir);
 
     // Set up progress bar's refresh rate
-    progress.enable_steady_tick(Duration::from_millis(100));
+    progress.enable_steady_tick(Duration::from_millis(150));
     let mut files_processed = 0;
 
-    // Event stream rt
-    // let rt = tokio::runtime::Builder::new_current_thread()
-    //     .enable_time()
-    //     .build()
-    //     .expect("failed to create runtime");
-
     for path in paths {
-        // Get relative path of file by removing the input path from the file path
+        // Get relative path of file by stripping input path from the start
         let rel_path = path.strip_prefix(&inp_path).unwrap();
+
         // If path is symlink, add to archive as symlink and don't follow it
         if path.symlink_metadata().unwrap().file_type().is_symlink() {
-            // get header from symlink
+            // Construct header for symlink
             let mut header = tar::Header::new_gnu();
-            // set header's path to relative path
             header.set_path(rel_path)?;
-            // set header's link_name to the symlink's target
-            // header.set_link_name(path.read_link().unwrap().to_str().unwrap())?;
-            // set entryType to symlink
             header.set_entry_type(tar::EntryType::Symlink);
+            // Add symlink to archive, with header, rel path in archive, and target path on sys
             archive.append_link(&mut header, rel_path, path.read_link().unwrap().to_str().unwrap())?;
-            // archive.append_symlink(rel_path, path.read_link().unwrap())?;
         } else {
-            // Add to archive and step progress bar
+            // Construct header for file
+            let mut header = tar::Header::new_gnu();
+            header.set_path(rel_path)?;
+            header.set_entry_type(tar::EntryType::Regular);
+            header.set_size(path.metadata().unwrap().len());
+            header.set_cksum();
+            // Add file to archive, with header, AsRef<Path>, and File
+            archive.append_data(&mut header, rel_path, fs::File::open(&path)?)?;
             // TODO: This needs to be done manually, since
             // append_file consistently fails with long pathnames
-            let mut file = fs::File::open(&path).unwrap();
-            archive.append_file(rel_path, &mut file).unwrap();
+            // let mut file = fs::File::open(&path).unwrap();
+            // archive.append_file(rel_path, &mut file).unwrap();
         }
+        // Increment progress bar
         files_processed += 1;
         progress.set_position(files_processed as u64);
     }

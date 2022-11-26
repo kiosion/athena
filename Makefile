@@ -1,3 +1,5 @@
+.PHONY: install, run, build, release, test, clean
+
 SHELL:=/bin/bash
 
 install:
@@ -8,14 +10,17 @@ run:
 
 build:
 	@cargo build && \
-	mkdir -p ./build/ && \
-	cp ./target/debug/athena ./build/athena
+	mkdir -p ./out/ && \
+	cp ./target/debug/athena ./out/athena
 
 release:
 	@cargo build --release && \
-	mkdir -p ./build/ && \
-	cp ./target/release/athena ./build/athena
+	mkdir -p ./out/ && \
+	cp ./target/release/athena ./out/athena
+
+test:
+	@cargo test
 
 clean:
 	@cargo clean && \
-	rm -rf ./build/
+	rm -rf ./out/
