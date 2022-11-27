@@ -3,7 +3,8 @@ use std::{fs, process, error};
 use std::path::PathBuf;
 use clap::Parser;
 use futures::future::{BoxFuture, FutureExt};
-use indicatif::{ProgressBar};
+use indicatif::ProgressBar;
+use file_owner::PathExt;
 
 mod validate;
 mod utils;
@@ -123,25 +124,17 @@ async fn compress_files(paths: Vec<PathBuf>, input_dir: PathBuf, output_dir: Pat
 
         // If path is symlink, add to archive as symlink and don't follow it
         if path.symlink_metadata().unwrap().file_type().is_symlink() {
-            // Construct header for symlink
-            let mut header = tar::Header::new_gnu();
-            header.set_path(rel_path)?;
-            header.set_entry_type(tar::EntryType::Symlink);
             // Add symlink to archive, with header, rel path in archive, and target path on sys
+            let mut header = tar::Header::new_gnu();
+            header.set_uid(path.owner().unwrap().id() as u64);
+            header.set_gid(path.group().unwrap().id() as u64);
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
             archive.append_link(&mut header, rel_path, path.read_link().unwrap().to_str().unwrap())?;
         } else {
-            // Construct header for file
-            let mut header = tar::Header::new_gnu();
-            header.set_path(rel_path)?;
-            header.set_entry_type(tar::EntryType::Regular);
-            header.set_size(path.metadata().unwrap().len());
-            header.set_cksum();
-            // Add file to archive, with header, AsRef<Path>, and File
-            archive.append_data(&mut header, rel_path, fs::File::open(&path)?)?;
-            // TODO: This needs to be done manually, since
-            // append_file consistently fails with long pathnames
-            // let mut file = fs::File::open(&path).unwrap();
-            // archive.append_file(rel_path, &mut file).unwrap();
+            // Since set_path() using this lib can't take pathnames > 255 bytes, we'll use
+            // its Builder methods to insert the potentially-long pathnames at the same time as the file content
+            archive.append_path_with_name(&path, rel_path)?;
         }
         // Increment progress bar
         files_processed += 1;
