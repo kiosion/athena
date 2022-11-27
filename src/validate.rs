@@ -12,6 +12,11 @@ pub fn input(input: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
 pub fn output(output: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
     // If output doesn't exist, we should prompt the user whether to create it
     if !output.exists() {
+        if output.is_file() {
+            if output.parent().unwrap().exists() {
+                return Ok(output);
+            }
+        }
         eprintln!("Output directory does not exist: '{}'", output.display());
         eprint!("Create it? [y/N] ");
         let mut input = String::new();
@@ -27,21 +32,20 @@ pub fn output(output: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
 }
 
 // Validates the generated archive file to ensure files were written and archive is a valid tar.gzip file
-pub fn archive(out: PathBuf, filename: &str) -> Result<PathBuf, Box<dyn Error>> {
-    let output_file = out.join(format!("{}.tar.gz", filename));
-    if !output_file.exists() {
+pub fn archive(out: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
+    if !out.exists() {
         return Err("Failed to write archive".into());
     }
-    if output_file.metadata()?.len() == 0 {
-        fs::remove_file(&output_file)?;
+    if out.metadata()?.len() == 0 {
+        fs::remove_file(&out)?;
         return Err("No files were processed".into());
     }
-    let mut file = std::fs::File::open(&output_file)?;
+    let mut file = std::fs::File::open(&out)?;
     let mut buf = [0; 2];
     std::io::Read::read_exact(&mut file, &mut buf)?;
     if buf != [0x1f, 0x8b] {
-        fs::remove_file(&output_file)?;
+        fs::remove_file(&out)?;
         return Err("Invalid archive".into());
     }
-    Ok(output_file)
+    Ok(out)
 }

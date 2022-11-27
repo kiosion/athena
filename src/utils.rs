@@ -1,6 +1,45 @@
-
 use std::{fmt::Write, time::Duration};
 use indicatif::{ProgressBar, ProgressStyle, HumanDuration, ProgressState};
+
+#[derive(Clone)]
+pub struct Options {
+    pub verbose: bool,
+    pub upload: bool,
+    pub compression: bool,
+    pub input_path: std::path::PathBuf,
+    pub output_path: std::path::PathBuf,
+}
+
+// Generic util for prompting user for y/n input
+pub fn prompt_user(message: String, prompt: String, default: Option<bool>) -> bool {
+    let default = match default {
+        Some(true) => "y",
+        Some(false) => "n",
+        None => "n",
+    };
+    eprintln!("{}", message);
+    eprint!("{} {} ", prompt, if default == "y" { "[Y/n]" } else { "[y/N]" });
+    let mut input = String::new();
+    loop {
+        std::io::stdin().read_line(&mut input).unwrap();
+        let answer = match input.trim().to_lowercase().as_str() {
+            "y" => "y",
+            "yes" => "y",
+            "n" => "n",
+            "no" => "n",
+            "" => default,
+            _ => {
+                eprint!("Invalid input, please enter 'y' or 'n': ");
+                input.clear();
+                continue;
+            }
+        };
+        if answer == "y" || answer == "n" {
+            return answer == "y";
+        }
+    }
+    
+}
 
 pub fn construct_progress(len: u64) -> ProgressBar {
     let bar = ProgressBar::new(len);
@@ -29,7 +68,7 @@ pub fn construct_progress(len: u64) -> ProgressBar {
                 _ => write!(w, "-").unwrap(),
             },
         )
-        .template("{spinner:.green} {msg} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({percent}%) ({smoothed_eta} remaining)")
+        .template("{spinner:.green} [{elapsed_precise}] {msg} [{wide_bar:.cyan/blue}] ({percent}%) ({smoothed_eta} remaining)")
         .unwrap()
         .tick_strings(&[".  ",".. ","..."," ..","  .","   "])
         .progress_chars("=>-");
